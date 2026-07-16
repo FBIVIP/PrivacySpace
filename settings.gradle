@@ -10,7 +10,9 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        jcenter()
+        // JCenter (Bintray) was shut down permanently; the Xposed API artifacts
+        // are served from the api.xposed.info Maven repo instead.
+        maven { url 'https://api.xposed.info/' }
     }
 }
 rootProject.name = "PrivacySpace"
