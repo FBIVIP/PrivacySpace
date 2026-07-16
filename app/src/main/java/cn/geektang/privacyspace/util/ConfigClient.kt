@@ -63,6 +63,28 @@ class ConfigClient(context: Context) {
     }
 
     private fun connectServer(methodName: String): String? {
+        // On Android 13+ the app-side PackageManager#getInstallerPackageName is
+        // served from a local InstallSourceInfo cache and never reaches
+        // system_server, so the module's hook on IPackageManager never sees our
+        // magic argument. Call IPackageManager directly (the same binder the hook
+        // sits on) via ActivityThread.getPackageManager() so the request actually
+        // crosses into system_server and hits ConfigServer.
+        val direct = try {
+            val am = Class.forName("android.app.ActivityThread")
+            val ipm = am.getMethod("getPackageManager").invoke(null) ?: return null
+            val method = ipm.javaClass.methods.firstOrNull {
+                it.name == "getInstallerPackageName" &&
+                    it.parameterTypes.size == 1 &&
+                    it.parameterTypes[0] == String::class.java
+            }
+            method?.invoke(ipm, methodName) as? String
+        } catch (e: Throwable) {
+            null
+        }
+        if (direct != null) {
+            return direct
+        }
+        // Fallback for older platforms where the app-side call still reaches the hook.
         return try {
             packageManager.getInstallerPackageName(methodName)
         } catch (e: Exception) {
