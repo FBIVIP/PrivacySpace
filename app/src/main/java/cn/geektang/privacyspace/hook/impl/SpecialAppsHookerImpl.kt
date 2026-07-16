@@ -31,17 +31,6 @@ object SpecialAppsHookerImpl : XC_MethodHook(), Hooker {
                 "getInstalledPackages",
                 "getInstalledApplications",
                 "getInstalledModules",
-                //TODO More testing is needed here
-//                "queryIntentActivities",
-//                "queryIntentActivityOptions",
-//                "queryBroadcastReceivers",
-//                "queryIntentServices",
-//                "queryIntentContentProviders",
-//                "resolveService",
-//                "resolveActivity",
-//                "resolveContentProvider",
-//                "queryContentProviders",
-//                "getPackageInfo"
             )
         packageManagerClass.declaredMethods.forEach {
             if (hookMethodSet.contains(it.name)) {
@@ -49,37 +38,23 @@ object SpecialAppsHookerImpl : XC_MethodHook(), Hooker {
             }
         }
 
-//        XposedHelpers.findAndHookMethod(
-//            View::class.java,
-//            "setOnClickListener",
-//            View.OnClickListener::class.java,
-//            object : XC_MethodHook() {
-//                private val cache = mutableSetOf<Class<*>>()
-//
-//                override fun afterHookedMethod(param: MethodHookParam) {
-//                    val listener = param.args.first()
-//                    val clazz = listener.javaClass
-//                    if (!cache.contains(clazz)) {
-//                        cache.add(clazz)
-//                        val method =
-//                            listener.javaClass.getDeclaredMethod("onClick", View::class.java)
-//                        method.isAccessible = true
-//                        XposedBridge.hookMethod(method, this@SpecialAppsHookerImpl)
-//                    }
-//                }
-//            }
-//        )
-
-        XposedHelpers.findAndHookMethod(
-            BatteryStatsHelper::class.java,
-            "getUsageList",
-            this
-        )
-        XposedHelpers.findAndHookMethod(
-            BatteryStatsHelper::class.java,
-            "getMobilemsppList",
-            this
-        )
+        // BatteryStatsHelper and BatterySipper (com.android.internal.os) were removed
+        // in Android 14 (API 34). Referencing them there throws NoClassDefFoundError,
+        // which would abort the whole hooker. Guard so newer Android degrades gracefully.
+        try {
+            XposedHelpers.findAndHookMethod(
+                BatteryStatsHelper::class.java,
+                "getUsageList",
+                this
+            )
+            XposedHelpers.findAndHookMethod(
+                BatteryStatsHelper::class.java,
+                "getMobilemsppList",
+                this
+            )
+        } catch (e: Throwable) {
+            XLog.e(e, "BatteryStatsHelper hooks skipped (not available on this Android version).")
+        }
 
         XposedHelpers.findAndHookMethod(
             ActivityManager::class.java,
@@ -202,14 +177,6 @@ object SpecialAppsHookerImpl : XC_MethodHook(), Hooker {
                     !shouldFilter
                 }
             }
-//            "onClick" -> {
-//                var view = param.args.first() as View?
-//                XLog.d("onClick ${view?.context}")
-//                do {
-//                    XLog.d("onClick $view")
-//                    view = view?.parent as? View
-//                } while (view != null)
-//            }
             else -> {}
         }
     }
