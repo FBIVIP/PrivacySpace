@@ -21,24 +21,35 @@ android {
         }
     }
 
+    // Release signing is only configured when a keystore is provided via env vars.
+    // Without it (e.g. a plain CI build) the app falls back to the auto-generated
+    // debug keystore, so assembleDebug works with zero secrets.
+    def hasReleaseSigning = System.env.Space_storeFile != null
+
     signingConfigs {
-        release {
-            keyAlias System.env.Space_keyAlias
-            keyPassword System.env.Space_keyPassword
-            storeFile file(System.env.Space_storeFile)
-            storePassword System.env.Space_storePassword
+        if (hasReleaseSigning) {
+            release {
+                keyAlias System.env.Space_keyAlias
+                keyPassword System.env.Space_keyPassword
+                storeFile file(System.env.Space_storeFile)
+                storePassword System.env.Space_storePassword
+            }
         }
     }
 
     buildTypes {
         debug {
-            buildConfigField('String', 'APP_CENTER_SECRET', "\"${System.env.Space_AppCenterSecret}\"")
-            signingConfig signingConfigs.release
+            buildConfigField('String', 'APP_CENTER_SECRET', "\"${System.env.Space_AppCenterSecret ?: ''}\"")
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
         }
         release {
-            buildConfigField('String', 'APP_CENTER_SECRET', "\"${System.env.Space_AppCenterSecret}\"")
+            buildConfigField('String', 'APP_CENTER_SECRET', "\"${System.env.Space_AppCenterSecret ?: ''}\"")
             minifyEnabled false
-            signingConfig signingConfigs.release
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
