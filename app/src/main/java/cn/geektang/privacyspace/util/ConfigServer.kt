@@ -64,35 +64,47 @@ class ConfigServer : XC_MethodHook() {
 
     /**
      * This module's config channel works by hooking IPackageManager#getInstallerPackageName
-     * and answering magic argument strings. On Android 13+ the IPackageManager
-     * implementation moved out of PackageManagerService into the nested class
-     * PackageManagerService$IPackageManagerImpl, so a fixed lookup against
-     * PackageManagerService throws NoSuchMethodError there - which aborted
-     * handleLoadPackage and silently prevented the AppsFilter hook from installing.
-     * Search both classes and match by name so signature churn cannot break us.
+     * and answering magic argument strings.
+     *
+     * Android 13 moved the IPackageManager implementation out of PackageManagerService
+     * into the nested class PackageManagerService$IPackageManagerImpl, and Android 14
+     * moved most read-only methods again, up into the IPackageManagerBase superclass.
+     * So getInstallerPackageName is NOT among IPackageManagerImpl's declaredMethods on
+     * Android 14+ - it is inherited. Walk the whole superclass chain of each candidate
+     * and match by name, so neither relocation nor signature churn can break us.
      */
     private fun hookGetInstallerPackageNameMethod(classLoader: ClassLoader) {
-        val candidates = mutableListOf<Class<*>>()
+        val roots = mutableListOf<Class<*>>()
         classLoader.loadClassSafe("com.android.server.pm.PackageManagerService\$IPackageManagerImpl")
-            ?.let { candidates.add(it) }
-        pmsClass?.let { candidates.add(it) }
+            ?.let { roots.add(it) }
+        classLoader.loadClassSafe("com.android.server.pm.IPackageManagerBase")
+            ?.let { roots.add(it) }
+        pmsClass?.let { roots.add(it) }
 
         var hooked = false
-        for (clazz in candidates) {
-            for (method in clazz.declaredMethods) {
-                if (method.name != "getInstallerPackageName" || method.parameterCount < 1) {
-                    continue
+        for (root in roots) {
+            var current: Class<*>? = root
+            while (current != null && current != Any::class.java) {
+                val clazz = current
+                for (method in clazz.declaredMethods) {
+                    if (method.name != "getInstallerPackageName" || method.parameterCount < 1) {
+                        continue
+                    }
+                    if (method.parameterTypes.first() != String::class.java) {
+                        continue
+                    }
+                    try {
+                        XposedBridge.hookMethod(method, this)
+                        hooked = true
+                        XLog.i("Hooked ${clazz.name}#getInstallerPackageName")
+                    } catch (e: Throwable) {
+                        XLog.e(e, "Failed to hook ${clazz.name}#getInstallerPackageName")
+                    }
                 }
-                if (method.parameterTypes.first() != String::class.java) {
-                    continue
+                if (hooked) {
+                    break
                 }
-                try {
-                    XposedBridge.hookMethod(method, this)
-                    hooked = true
-                    XLog.i("Hooked ${clazz.name}#getInstallerPackageName")
-                } catch (e: Throwable) {
-                    XLog.e(e, "Failed to hook ${clazz.name}#getInstallerPackageName")
-                }
+                current = clazz.superclass
             }
             if (hooked) {
                 break
