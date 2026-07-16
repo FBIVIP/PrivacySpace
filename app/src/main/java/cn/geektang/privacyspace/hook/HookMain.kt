@@ -70,7 +70,7 @@ class HookMain : IXposedHookLoadPackage {
         packageName = lpparam.packageName
         classLoader = lpparam.classLoader
         if (lpparam.packageName == ConfigConstant.ANDROID_FRAMEWORK) {
-           loadConfigDataAndParse()
+            loadConfigDataAndParse()
             // Keep the config channel isolated: if ConfigServer fails to install its
             // hook (AOSP moves these methods between releases), the framework filter
             // below must still be installed, otherwise hiding silently stops working.
